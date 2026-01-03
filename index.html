@@ -3,25 +3,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fact Scroll</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Fact Flow</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bungee&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Lexend', sans-serif;
             overflow: hidden;
+            background-color: #0D0D0D;
+            /* Support for mobile status bars */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
         .font-bungee { font-family: 'Bungee', cursive; }
         .font-jakarta { font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Snap scrolling for vertical cards */
         .snap-y-container {
             scroll-snap-type: y mandatory;
             height: 100vh;
             overflow-y: scroll;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            -webkit-overflow-scrolling: touch;
         }
         .snap-y-container::-webkit-scrollbar {
             display: none;
@@ -29,9 +33,9 @@
         .snap-item {
             scroll-snap-align: start;
             height: 100vh;
+            position: relative;
         }
 
-        /* Hide scrollbars for side-scrolling hive rows */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -40,7 +44,6 @@
             scrollbar-width: none;
         }
 
-        /* Animations */
         @keyframes float {
             0% { transform: translateY(0px); }
             50% { transform: translateY(-10px); }
@@ -54,6 +57,25 @@
             100% { transform: scale(1); opacity: 1; }
         }
         .level-up-anim { animation: levelUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes xp-float {
+            0% { transform: translateY(0); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+        .xp-popup {
+            animation: xp-float 1s ease-out forwards;
+        }
     </style>
 <script type="importmap">
 {
