@@ -1,0 +1,8 @@
+
+{
+  "name": "Fact Flow",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "custom"
+}

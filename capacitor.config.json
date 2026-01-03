@@ -3,7 +3,6 @@
   "appId": "io.factflow.app",
   "appName": "Fact Flow",
   "webDir": ".",
-  "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
   }

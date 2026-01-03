@@ -4,6 +4,11 @@
   "version": "1.0.0",
   "description": "Addictive gamified facts app",
   "main": "index.tsx",
+  "scripts": {
+    "build": "echo 'No build step required for simple SPA'",
+    "ionic:build": "npm run build",
+    "ionic:persist": "echo 'persisting'"
+  },
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
