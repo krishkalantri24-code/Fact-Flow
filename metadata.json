@@ -1,0 +1,7 @@
+{
+  "name": "Fact flow",
+  "description": "An addictive, gamified infinite scroll app for discovering obscure and fun facts, featuring a TikTok-style UI, JRPG leveling system, and AI-powered quizzes.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
