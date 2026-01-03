@@ -75,7 +75,7 @@ const App: React.FC = () => {
     };
   });
 
-  // Quiz States
+  // Quiz UI States
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [quizLoading, setQuizLoading] = useState(false);
@@ -102,23 +102,15 @@ const App: React.FC = () => {
   const feedRef = useRef<HTMLDivElement>(null);
   const colors = THEME_COLORS[theme];
 
-  // Persistent Storage
+  // Persistence
   useEffect(() => { localStorage.setItem('fact-user', JSON.stringify(user)); }, [user]);
   useEffect(() => { localStorage.setItem('fact-theme', theme); }, [theme]);
-
-  // Auth/Curation routing
-  useEffect(() => {
-    if (user.username && view === 'auth') {
-      setView(user.isCurated ? 'feed' : 'setup');
-    }
-  }, [user.username, user.isCurated]);
 
   const loadMoreFacts = async (isExplore: boolean = false) => {
     if (loading) return;
     setLoading(true);
     const newFacts = await getFacts(isExplore ? [] : user.interests, user.dislikedTopics, isExplore);
     
-    // Algorithm: prevent more than 2 consecutive facts of same topic
     const processed: Fact[] = [];
     let lastTopic = facts.length > 0 ? facts[facts.length - 1].topic : "";
     let secondLastTopic = facts.length > 1 ? facts[facts.length - 2].topic : "";
@@ -130,21 +122,21 @@ const App: React.FC = () => {
       lastTopic = f.topic;
     }
 
-    // Insert Ad every ~12 cards
-    const totalCount = facts.length + processed.length;
-    const adThreshold = 12;
-    if (Math.floor(totalCount / adThreshold) > Math.floor(facts.length / adThreshold)) {
-      const adIndex = Math.floor(processed.length / 2);
+    // Insert Ad every 12 cards
+    const adInterval = 12;
+    const currentTotal = facts.length;
+    if (Math.floor((currentTotal + processed.length) / adInterval) > Math.floor(currentTotal / adInterval)) {
+      const adIndex = processed.length > 2 ? 2 : processed.length;
       processed.splice(adIndex, 0, {
         id: `ad-${Date.now()}`,
-        isAd: true,
-        topic: "Advertisement",
-        content: "",
-        sourceName: "",
-        sourceUrl: "",
+        topic: "Sponsored",
+        content: "AD_PLACEHOLDER",
+        sourceName: "Ads",
+        sourceUrl: "#",
         liked: false,
         saved: false,
-        xpEarned: true
+        xpEarned: true,
+        isAd: true
       });
     }
 
@@ -153,7 +145,9 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user.username && view === 'feed' && facts.length === 0) loadMoreFacts();
+    if (user.username && (view === 'feed' || view === 'explore') && facts.length === 0) {
+      loadMoreFacts(view === 'explore');
+    }
   }, [view, user.username]);
 
   const addXP = (amount: number) => {
@@ -162,7 +156,7 @@ const App: React.FC = () => {
       let lvl = prev.level;
       let next = prev.nextLevelXp;
       if (xp >= next) {
-        lvl++; xp -= next; next = Math.floor(next * 1.6);
+        lvl++; xp -= next; next = Math.floor(next * 1.5);
         setLevelUpPopup(lvl); setTimeout(() => setLevelUpPopup(null), 4000);
       }
       return { ...prev, xp, level: lvl, nextLevelXp: next };
@@ -172,7 +166,7 @@ const App: React.FC = () => {
   const startQuiz = async (diff: 'easy' | 'medium' | 'hard') => {
     const seen = facts.filter(f => f.xpEarned && !f.isAd);
     if (seen.length < 5) {
-      alert("Keep scrolling! Unlock quizzes after 5 facts.");
+      alert("Please view at least 5 facts to unlock quizzes.");
       return;
     }
     setQuizDifficulty(diff);
@@ -195,16 +189,15 @@ const App: React.FC = () => {
     
     setTimeout(() => {
       if (isCorrect) {
-        const xpMap = { easy: 25, medium: 50, hard: 100 };
-        addXP(xpMap[quizDifficulty!]);
-        
+        const xpGain = quizDifficulty === 'hard' ? 100 : quizDifficulty === 'medium' ? 50 : 25;
+        addXP(xpGain);
         if (currentQuizIndex < quizQuestions.length - 1) {
           setCurrentQuizIndex(prev => prev + 1);
           setSelectedQuizOption(null);
           setShowAnswerFeedback(false);
         } else {
           setQuizFinished(true);
-          addXP(quizDifficulty === 'hard' ? 200 : 50); // Hard completion bonus
+          addXP(50); // Completion bonus
         }
       } else {
         setTimeout(() => {
@@ -290,47 +283,40 @@ const App: React.FC = () => {
     setReplyTarget(null);
   };
 
-  // Plain English setting names
-  const settingsLabels = {
-    theme: "Dark Mode",
-    voice: "Voice",
-    feedback: "Feedback Board",
-    logout: "Log Out"
-  };
-
   return (
     <div className={`fixed inset-0 overflow-hidden transition-colors duration-500 font-jakarta ${colors.bg} ${colors.text}`}>
       
-      {/* Universal Loading Overlay */}
-      {loading && facts.length === 0 && view === 'feed' && (
-        <div className="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-[#F6F4F0] dark:bg-[#0D0D0D]">
+      {/* Loading Screen Overlay */}
+      {loading && facts.length === 0 && (view === 'feed' || view === 'explore') && (
+        <div className="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-white dark:bg-black/90 animate-in fade-in duration-300">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6" />
-          <p className="font-black text-xs uppercase tracking-[0.4em] opacity-40">Connecting to Knowledge Flow...</p>
+          <h2 className="text-xl font-black italic tracking-tight mb-2">FACT FLOW</h2>
+          <p className="text-xs font-bold opacity-40 uppercase tracking-widest">Gathering curious knowledge...</p>
         </div>
       )}
 
       {view === 'auth' && (
-        <div className="flex flex-col items-center justify-center h-full p-10 space-y-8 animate-in fade-in zoom-in duration-500">
-          <div className="w-24 h-24 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl rotate-12 float-anim">
+        <div className="flex flex-col items-center justify-center h-full p-10 space-y-8">
+          <div className="w-24 h-24 bg-blue-600 rounded-[32px] flex items-center justify-center shadow-2xl rotate-12 float-anim">
             <span className="text-4xl text-white font-black">F</span>
           </div>
           <div className="text-center space-y-2">
             <h1 className="text-4xl font-black tracking-tighter">FACT FLOW</h1>
-            <p className="opacity-60 text-sm">Discover amazing truths every day.</p>
+            <p className="opacity-60 text-sm">Scroll into the world of amazing facts.</p>
           </div>
           <div className="w-full max-w-xs space-y-4">
             <input 
               type="text" 
-              placeholder="Your Username" 
+              placeholder="Your Name" 
               value={user.username}
-              className={`w-full p-5 rounded-3xl ${theme === 'light' ? 'bg-white' : 'bg-white/5'} border border-slate-200 outline-none font-bold text-center focus:ring-2 focus:ring-blue-600`}
+              className={`w-full p-6 rounded-[32px] ${theme === 'light' ? 'bg-white shadow-sm border border-slate-100' : 'bg-white/5'} outline-none font-bold text-center focus:ring-4 focus:ring-blue-600/20`}
               onChange={e => setUser(u => ({ ...u, username: e.target.value }))}
             />
             <button 
               onClick={() => user.username.length > 2 && setView(user.isCurated ? 'feed' : 'setup')}
-              className={`w-full py-5 rounded-full font-black text-white shadow-xl transition-all active:scale-95 ${user.username.length > 2 ? 'bg-blue-600' : 'bg-slate-400 grayscale opacity-50'}`}
+              className={`w-full py-6 rounded-full font-black text-white shadow-xl transition-all active:scale-95 ${user.username.length > 2 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-400 grayscale opacity-50'}`}
             >
-              START EXPLORING
+              START DISCOVERING
             </button>
           </div>
         </div>
@@ -345,17 +331,13 @@ const App: React.FC = () => {
           {facts.map((fact, i) => (
             <div key={fact.id} className="snap-item w-full h-full flex items-center justify-center p-8 pb-32 relative">
               {fact.isAd ? (
-                /* Google AdSense Placeholder Card */
-                <div className={`w-full max-w-sm h-[65%] rounded-[56px] shadow-sm relative overflow-hidden bg-slate-200 dark:bg-slate-800 flex flex-col items-center justify-center border-4 border-dashed border-slate-400/50`}>
-                   <div className="text-center p-10 space-y-4">
-                      <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-30"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                      </div>
-                      <p className="font-black text-[10px] uppercase tracking-widest opacity-30">Sponsored Content Placeholder</p>
-                      <p className="text-xs font-medium opacity-20">Ad space available for connection</p>
+                /* Google AdSense Placeholder */
+                <div className={`w-full max-w-sm h-[65%] rounded-[56px] shadow-sm relative overflow-hidden bg-slate-200 dark:bg-slate-800 flex items-center justify-center p-10 border-4 border-dashed border-slate-400/50`}>
+                   <div className="text-center space-y-4 opacity-40">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                      <p className="font-black text-[10px] uppercase tracking-[0.4em]">Ad Placeholder</p>
+                      <p className="text-[10px] font-bold">Connect your AdSense unit here</p>
                    </div>
-                   {/* In a real implementation, you would place the <ins> tag here */}
-                   <div className="absolute top-4 right-4 text-[8px] font-black uppercase opacity-20 border border-current px-2 py-1 rounded">Ad</div>
                 </div>
               ) : (
                 <div className={`w-full max-w-sm h-[65%] p-10 rounded-[56px] shadow-sm relative bg-gradient-to-br ${theme === 'light' ? LIGHT_GRADIENTS[i % LIGHT_GRADIENTS.length] : DARK_GRADIENTS[i % DARK_GRADIENTS.length]} transition-all duration-700 transform ${currentIndex === i ? 'scale-100 opacity-100' : 'scale-90 opacity-10'}`}>
@@ -367,7 +349,7 @@ const App: React.FC = () => {
                       {fact.content}
                     </h2>
                     <a href={fact.sourceUrl} target="_blank" className="text-[9px] font-black opacity-40 hover:opacity-100 uppercase tracking-widest flex items-center gap-2">
-                      Check Source
+                      LEARN MORE
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     </a>
                   </div>
@@ -396,23 +378,23 @@ const App: React.FC = () => {
             </div>
           ))}
           {loading && (
-             <div className="h-20 w-full flex items-center justify-center opacity-30 animate-pulse text-[10px] font-black uppercase tracking-[0.5em]">Loading next batch...</div>
+             <div className="h-20 w-full flex items-center justify-center opacity-30 animate-pulse text-[10px] font-black uppercase tracking-[0.5em]">Fetching more insight...</div>
           )}
         </div>
       )}
 
       {showDeckPicker && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 p-6 animate-in slide-in-from-bottom duration-300">
-          <div className={`${theme === 'light' ? 'bg-white' : 'bg-[#1a1a1a]'} w-full max-w-sm rounded-[48px] p-8 space-y-6 shadow-2xl`}>
-            <h3 className="text-xl font-black text-center">SAVE TO DECK</h3>
-            <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto no-scrollbar p-1">
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 p-6">
+          <div className={`${theme === 'light' ? 'bg-white' : 'bg-[#1a1a1a]'} w-full max-w-sm rounded-[48px] p-8 space-y-6 shadow-2xl animate-in slide-in-from-bottom duration-300`}>
+            <h3 className="text-xl font-black text-center">ADD TO DECK</h3>
+            <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto no-scrollbar">
               {user.decks.map(deck => (
-                <button key={deck.id} onClick={() => handleSaveToDeck(showDeckPicker, deck.id)} className={`p-4 rounded-3xl ${deck.color} text-white font-black text-[10px] uppercase text-center shadow-md active:scale-95 transition-all`}>
+                <button key={deck.id} onClick={() => handleSaveToDeck(showDeckPicker, deck.id)} className={`p-4 rounded-3xl ${deck.color} text-white font-black text-[10px] uppercase text-center shadow-md`}>
                   {deck.name}
                 </button>
               ))}
               <button onClick={() => {
-                const name = prompt("Deck Name:");
+                const name = prompt("Enter new deck name:");
                 if (name) {
                   const id = createNewDeck(name);
                   handleSaveToDeck(showDeckPicker, id);
@@ -421,7 +403,7 @@ const App: React.FC = () => {
                 + NEW DECK
               </button>
             </div>
-            <button onClick={() => setShowDeckPicker(null)} className="w-full py-4 text-xs font-black opacity-40 uppercase tracking-widest">Cancel</button>
+            <button onClick={() => setShowDeckPicker(null)} className="w-full py-4 text-xs font-black opacity-40 uppercase tracking-widest">CANCEL</button>
           </div>
         </div>
       )}
@@ -429,43 +411,40 @@ const App: React.FC = () => {
       {view === 'quiz' && (
         <div className={`fixed inset-0 overflow-y-auto pb-40 px-6 pt-24 ${colors.bg}`}>
           <div className="max-w-md mx-auto space-y-8">
-            <h1 className="text-3xl font-black tracking-tighter">QUIZ</h1>
+            <h1 className="text-3xl font-black tracking-tighter italic">RETENTION TEST</h1>
             {quizLoading ? (
-              <div className="text-center py-20 font-black opacity-50 animate-pulse text-[10px] tracking-widest uppercase">Building Test...</div>
+              <div className="text-center py-20 font-black opacity-50 animate-pulse text-[10px] tracking-widest uppercase">SYNTESIZING MODULE...</div>
             ) : quizFinished ? (
               <div className="text-center space-y-8 py-20 animate-in zoom-in duration-500">
                 <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-2xl border-8 border-white">
                   <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-black uppercase italic">Mastery Improved</h2>
-                  <p className="opacity-60 font-medium">Knowledge locked into memory.</p>
+                  <h2 className="text-2xl font-black uppercase">Test Passed!</h2>
+                  <p className="opacity-60 font-medium">Knowledge successfully archived to memory.</p>
                 </div>
-                <button onClick={() => setView('feed')} className="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black uppercase tracking-widest shadow-xl">Back to Feed</button>
+                <button onClick={() => setView('feed')} className="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black uppercase tracking-widest shadow-xl">BACK TO FEED</button>
               </div>
             ) : quizQuestions.length === 0 ? (
               <div className="text-center py-20 space-y-10">
-                <p className="opacity-60 font-black text-xs uppercase tracking-widest">Select Difficulty Level</p>
+                <div className="opacity-60 space-y-2">
+                  <p className="font-black text-xs uppercase tracking-widest">CHOOSE CHALLENGE</p>
+                  <p className="text-sm font-medium">Verify your memory of facts you have seen.</p>
+                </div>
                 <div className="grid gap-4">
-                  {[
-                    { id: 'easy', label: 'Easy (25 XP)', color: 'bg-emerald-500' },
-                    { id: 'medium', label: 'Medium (50 XP)', color: 'bg-amber-500' },
-                    { id: 'hard', label: 'Hard (100 XP)', color: 'bg-rose-500' }
-                  ].map(lvl => (
-                    <button key={lvl.id} onClick={() => startQuiz(lvl.id as any)} className={`w-full py-6 ${lvl.color} text-white rounded-[32px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all`}>
-                      {lvl.label}
-                    </button>
-                  ))}
+                  <button onClick={() => startQuiz('easy')} className="w-full py-6 bg-emerald-500 text-white rounded-[32px] font-black uppercase tracking-widest shadow-lg">EASY (25 XP)</button>
+                  <button onClick={() => startQuiz('medium')} className="w-full py-6 bg-amber-500 text-white rounded-[32px] font-black uppercase tracking-widest shadow-lg">MEDIUM (50 XP)</button>
+                  <button onClick={() => startQuiz('hard')} className="w-full py-6 bg-rose-500 text-white rounded-[32px] font-black uppercase tracking-widest shadow-lg">HARD (100 XP)</button>
                 </div>
               </div>
             ) : (
               <div className="space-y-6">
                 <div className="flex justify-between items-center text-[10px] font-black opacity-30 uppercase tracking-widest">
                   <span>Question {currentQuizIndex + 1} / {quizQuestions.length}</span>
-                  <span className="text-blue-600 italic">{quizDifficulty}</span>
+                  <span className="text-blue-600">{quizDifficulty}</span>
                 </div>
-                <div className={`p-10 rounded-[48px] ${theme === 'light' ? 'bg-white shadow-sm' : 'bg-white/5'} border border-slate-200/50`}>
-                  <p className="text-xl font-black leading-tight tracking-tight">{quizQuestions[currentQuizIndex].question}</p>
+                <div className={`p-10 rounded-[48px] ${theme === 'light' ? 'bg-white shadow-sm border border-slate-50' : 'bg-white/5'} border border-slate-200/50`}>
+                  <p className="text-xl font-black leading-tight">{quizQuestions[currentQuizIndex].question}</p>
                 </div>
                 <div className="grid gap-4">
                   {quizQuestions[currentQuizIndex].options.map((opt, i) => {
@@ -476,7 +455,7 @@ const App: React.FC = () => {
                     if (showAnswerFeedback) {
                       if (isCorrect) btnClass = "bg-green-500 text-white border-green-200";
                       else if (isSelected) btnClass = "bg-rose-500 text-white border-rose-200";
-                      else btnClass = "opacity-20 grayscale";
+                      else btnClass = "opacity-20 grayscale scale-95";
                     }
 
                     return (
@@ -500,7 +479,7 @@ const App: React.FC = () => {
       {view === 'saved' && (
         <div className={`fixed inset-0 overflow-y-auto pb-40 px-6 pt-24 ${colors.bg}`}>
           <div className="max-w-md mx-auto space-y-10">
-            <h1 className="text-3xl font-black tracking-tighter">SAVED DECKS</h1>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic">YOUR DECKS</h1>
             
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
               <button 
@@ -520,19 +499,19 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            <div className="grid gap-10">
+            <div className="grid gap-12">
               {facts.filter(f => f.saved && (activeDeckFilter ? f.deckId === activeDeckFilter : true)).length === 0 ? (
-                <div className="py-20 text-center opacity-30 font-black uppercase text-[10px] tracking-[0.3em]">No cards found.</div>
+                <div className="py-20 text-center opacity-30 font-black uppercase text-[10px] tracking-[0.4em]">Deck is currently empty.</div>
               ) : (
                 facts.filter(f => f.saved && (activeDeckFilter ? f.deckId === activeDeckFilter : true)).map((f, i) => (
                   <div key={f.id} className={`w-full p-8 rounded-[48px] shadow-lg bg-gradient-to-br ${theme === 'light' ? LIGHT_GRADIENTS[i % LIGHT_GRADIENTS.length] : DARK_GRADIENTS[i % DARK_GRADIENTS.length]} space-y-6 relative group overflow-hidden`}>
                     <div className="flex justify-between items-start">
-                       <span className="px-3 py-1 bg-black/20 text-white rounded-full text-[8px] font-black uppercase tracking-widest">{f.topic}</span>
-                       <button onClick={() => setFacts(p => p.map(item => item.id === f.id ? { ...item, saved: false } : item))} className="opacity-0 group-hover:opacity-40 transition-opacity"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                       <span className="px-4 py-1 bg-black/20 text-white rounded-full text-[8px] font-black uppercase tracking-widest">{f.topic}</span>
+                       <button onClick={() => setFacts(p => p.map(item => item.id === f.id ? { ...item, saved: false } : item))} className="opacity-20 hover:opacity-100 transition-opacity"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                     </div>
                     <p className={`text-sm font-black leading-snug ${theme === 'dark' ? 'text-white' : 'text-[#002366]'}`}>{f.content}</p>
-                    <button onClick={() => handleSpeak(f.content)} className="flex items-center gap-2 text-[9px] font-black uppercase opacity-40 hover:opacity-100">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg> Hear Fact
+                    <button onClick={() => handleSpeak(f.content)} className="flex items-center gap-2 text-[10px] font-black uppercase opacity-40 hover:opacity-100">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg> HEAR FACT
                     </button>
                   </div>
                 ))
@@ -559,18 +538,18 @@ const App: React.FC = () => {
               </button>
               <h1 className="text-3xl font-black uppercase tracking-tighter">{user.username}</h1>
               <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">Level {user.level}</span>
+                <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">LVL {user.level}</span>
                 <span className="text-[10px] font-black bg-orange-100 text-orange-600 px-3 py-1 rounded-full uppercase tracking-widest">{user.streak}D STREAK</span>
               </div>
             </div>
 
             <div className={`p-10 rounded-[56px] ${theme === 'light' ? 'bg-white shadow-sm border border-slate-100' : 'bg-white/5 border border-white/5'} space-y-8`}>
-              <SectionTitle>Global Metrics</SectionTitle>
+              <SectionTitle>MY PROGRESS</SectionTitle>
               <div className="grid grid-cols-3 gap-6">
                 {[
-                  { l: 'Saved', v: facts.filter(f => f.saved).length, c: 'text-orange-500' },
-                  { l: 'Total XP', v: user.xp, c: 'text-blue-500' },
-                  { l: 'Level', v: user.level, c: 'text-emerald-500' }
+                  { l: 'SAVED', v: facts.filter(f => f.saved).length, c: 'text-orange-500' },
+                  { l: 'TOTAL XP', v: user.xp, c: 'text-blue-500' },
+                  { l: 'BADGES', v: user.badges.reduce((a, b) => a + b.count, 0), c: 'text-emerald-500' }
                 ].map((s, i) => (
                   <div key={i} className="text-center">
                     <div className={`text-2xl font-black ${s.c}`}>{s.v}</div>
@@ -581,28 +560,30 @@ const App: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              <SectionTitle>Settings</SectionTitle>
+              <SectionTitle>SETTINGS</SectionTitle>
               <div className={`rounded-[40px] overflow-hidden ${theme === 'light' ? 'bg-white shadow-sm border border-slate-100' : 'bg-white/5 border border-white/5'}`}>
-                <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="w-full p-6 flex justify-between items-center hover:bg-black/5 transition-all">
-                  <span className="font-black text-xs uppercase tracking-widest">{settingsLabels.theme}</span>
-                  <span className="text-[10px] font-black opacity-30 uppercase">{theme === 'dark' ? 'On' : 'Off'}</span>
+                <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="w-full p-6 flex justify-between items-center hover:bg-black/5 transition-all group">
+                  <span className="font-black text-xs uppercase tracking-widest">Dark Mode</span>
+                  <div className={`w-12 h-6 rounded-full transition-all duration-300 relative ${theme === 'dark' ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${theme === 'dark' ? 'left-7' : 'left-1'}`} />
+                  </div>
                 </button>
                 <div className="h-px bg-slate-200/50 w-full" />
                 <button onClick={() => setSelectedVoice(v => v === 'female' ? 'male' : 'female')} className="w-full p-6 flex justify-between items-center hover:bg-black/5 transition-all">
-                  <span className="font-black text-xs uppercase tracking-widest">{settingsLabels.voice}</span>
+                  <span className="font-black text-xs uppercase tracking-widest">Voice</span>
                   <span className="text-[10px] font-black opacity-30 uppercase">{selectedVoice}</span>
                 </button>
                 <div className="h-px bg-slate-200/50 w-full" />
                 <button onClick={() => setView('feedback')} className="w-full p-6 flex justify-between items-center hover:bg-black/5 transition-all">
-                  <span className="font-black text-xs uppercase tracking-widest">{settingsLabels.feedback}</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-30"><path d="M9 18l6-6-6-6"/></svg>
+                  <span className="font-black text-xs uppercase tracking-widest">Feedback Board</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-30 group-hover:translate-x-1 transition-transform"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
                 <div className="h-px bg-slate-200/50 w-full" />
                 <button 
-                  onClick={() => { if(confirm("Are you sure you want to log out? Your local data will be cleared.")) { localStorage.clear(); window.location.reload(); } }}
+                  onClick={() => { if(confirm("Are you sure you want to log out? Local data will be cleared.")) { localStorage.clear(); window.location.reload(); } }}
                   className="w-full p-6 flex justify-between items-center hover:bg-rose-500/10 text-rose-500 transition-all"
                 >
-                  <span className="font-black text-[10px] uppercase tracking-widest">{settingsLabels.logout}</span>
+                  <span className="font-black text-[10px] uppercase tracking-widest">Log Out</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 </button>
               </div>
@@ -615,22 +596,22 @@ const App: React.FC = () => {
          <div className={`fixed inset-0 overflow-y-auto pb-40 px-6 pt-24 animate-in slide-in-from-right duration-500 ${colors.bg}`}>
             <div className="max-w-md mx-auto space-y-10">
                <button onClick={() => setView('profile')} className="p-4 rounded-[24px] bg-white/10 border border-slate-200/50 hover:bg-white/20 transition-all"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m15 18-6-6 6-6"/></svg></button>
-               <h1 className="text-4xl font-black tracking-tighter uppercase italic">Feedback Board</h1>
+               <h1 className="text-4xl font-black tracking-tighter uppercase italic">Feedback</h1>
                <div className="space-y-4">
                   <textarea 
                     value={newFeedbackText} 
                     onChange={e => setNewFeedbackText(e.target.value)} 
-                    placeholder="Tell us what you think..." 
-                    className={`w-full h-32 p-6 rounded-[32px] ${theme === 'light' ? 'bg-white shadow-sm' : 'bg-white/5'} border border-slate-200 outline-none text-sm font-bold resize-none focus:ring-2 focus:ring-blue-600`} 
+                    placeholder="Tell us what you'd like to see next..." 
+                    className={`w-full h-32 p-6 rounded-[32px] ${theme === 'light' ? 'bg-white shadow-sm' : 'bg-white/5'} border border-slate-200 outline-none text-sm font-bold resize-none focus:ring-4 focus:ring-blue-600/10`} 
                   />
-                  <button onClick={handleSubmitFeedback} className="w-full py-5 bg-blue-600 text-white rounded-[32px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Submit Feedback</button>
+                  <button onClick={handleSubmitFeedback} className="w-full py-5 bg-blue-600 text-white rounded-[32px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Submit Entry</button>
                </div>
                <div className="space-y-8">
                   {feedbacks.map(f => (
                      <div key={f.id} className={`p-8 rounded-[48px] ${theme === 'light' ? 'bg-white shadow-sm' : 'bg-white/5'} border border-slate-200/50 space-y-6`}>
                         <div className="flex justify-between items-center">
                            <div className="flex items-center gap-2">
-                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-black text-blue-600">{f.username.charAt(0)}</div>
+                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-black text-blue-600 uppercase">{f.username.charAt(0)}</div>
                              <span className="text-[10px] font-black opacity-40 uppercase tracking-widest">{f.username}</span>
                            </div>
                            <span className="text-[8px] opacity-20 uppercase font-black">{new Date(f.timestamp).toLocaleDateString()}</span>
@@ -643,7 +624,7 @@ const App: React.FC = () => {
                         {replyTarget === f.id && (
                            <div className="flex gap-2 animate-in fade-in duration-300">
                              <input value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Type reply..." className="flex-1 bg-white/5 border border-slate-200/50 rounded-full px-5 text-xs font-bold outline-none" />
-                             <button onClick={() => handleSubmitReply(f.id)} className="px-5 py-3 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest">Send</button>
+                             <button onClick={() => handleSubmitReply(f.id)} className="px-5 py-3 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest">SEND</button>
                            </div>
                         )}
                         {f.replies.map(r => (
@@ -665,15 +646,15 @@ const App: React.FC = () => {
             <div className="w-full space-y-4">
               <button 
                 onClick={() => {
-                  const url = prompt("Enter a word for a new profile pic (e.g. 'star', 'cat'):");
+                  const url = prompt("Input a word for your new avatar (e.g. 'space', 'history'):");
                   if (url) setUser(u => ({ ...u, pfpUrl: url.startsWith('http') ? url : `https://picsum.photos/seed/${url}/400` }));
                   setShowPfpModal(false);
                 }} 
                 className="w-full py-6 bg-blue-600 text-white font-black rounded-full uppercase tracking-widest shadow-xl active:scale-95 transition-all"
               >
-                Change Picture
+                Change Avatar
               </button>
-              <button onClick={() => setShowPfpModal(false)} className="w-full py-4 text-white opacity-40 font-black uppercase tracking-widest">Close</button>
+              <button onClick={() => setShowPfpModal(false)} className="w-full py-4 text-white opacity-40 font-black uppercase tracking-widest">CLOSE</button>
             </div>
           </div>
         </div>
@@ -687,8 +668,8 @@ const App: React.FC = () => {
               <div className="w-60 h-60 bg-blue-600 rounded-[72px] shadow-[0_0_100px_rgba(37,99,235,0.6)] flex items-center justify-center mb-10 rotate-12 mx-auto scale-110 level-up-anim">
                 <span className="text-9xl font-black text-white">{levelUpPopup}</span>
               </div>
-              <h1 className="text-6xl font-black text-white mb-4 tracking-tighter uppercase italic drop-shadow-2xl">Level Up!</h1>
-              <p className="text-blue-400 font-black tracking-[0.5em] text-sm uppercase">Neural capacity increased</p>
+              <h1 className="text-6xl font-black text-white mb-4 tracking-tighter uppercase italic drop-shadow-2xl">LEVEL UP</h1>
+              <p className="text-blue-400 font-black tracking-[0.5em] text-sm uppercase">Cognitive baseline expanded</p>
             </div>
           </div>
         </>
